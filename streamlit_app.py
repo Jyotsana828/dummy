@@ -13,11 +13,19 @@ if 'records' not in st.session_state:
 with st.form("add_record_form"):
     col1, col2 = st.columns(2)
     with col1:
-        milk_kg = st.number_input("Milk (KG)", min_value=0.0, step=0.01, format="%.2f", key="manual_milk_kg")
+        milk_kg_str = st.text_input("Milk (KG)", value="", key="manual_milk_kg")
     with col2:
-        dip = st.number_input("DIP", min_value=0.0, step=0.01, format="%.2f", key="manual_dip")
+        dip_str = st.text_input("DIP", value="", key="manual_dip")
     submitted = st.form_submit_button("Add Record")
     if submitted:
+        try:
+            milk_kg = float(milk_kg_str)
+        except (ValueError, TypeError):
+            milk_kg = 0.0
+        try:
+            dip = float(dip_str)
+        except (ValueError, TypeError):
+            dip = 0.0
         dip_mm = round(dip * 10, 2)
         st.session_state['records'].append({
             'Milk (KG)': round(milk_kg, 2),
