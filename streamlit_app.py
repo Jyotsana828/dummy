@@ -36,20 +36,7 @@ with st.form("add_record_form"):
 
 if st.session_state['records']:
     st.subheader("Current Records")
-    
-    # Display records with delete buttons
-    for idx, record in enumerate(st.session_state['records']):
-        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-        with col1:
-            st.write(f"**Milk (KG):** {record['Milk (KG)']}")
-        with col2:
-            st.write(f"**DIP:** {record['DIP']}")
-        with col3:
-            st.write(f"**DIP(MM):** {record['DIP(MM)']}")
-        with col4:
-            if st.button("🗑️ Delete", key=f"delete_{idx}"):
-                st.session_state['records'].pop(idx)
-                st.rerun()
+    st.table(st.session_state['records'])
 else:
     st.info("No records added yet.")
 
@@ -333,4 +320,4 @@ if st.session_state['records']:
     with col6:
         if st.button("Clear Records"):
             st.session_state['records'] = []
-            st.rerun()
+            st.experimental_rerun()
