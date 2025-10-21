@@ -81,74 +81,131 @@ def generate_dip_table_from_records(records, dip_start=None, dip_end=None, mode=
         if dip > max_actual_dip:
             break
         row = [dip]
-        if dip in special_cases:
-            step_size = special_cases[dip]
-            lower_dips = [d for d in sorted_dips if d <= dip]
+        
+        # Check if this DIP is an exact reference point
+        if dip in value_map:
+            # This is an exact reference point - use it directly
+            base_value = value_map[dip]
             higher_dips = [d for d in sorted_dips if d > dip]
-            if lower_dips:
-                lower_dip = max(lower_dips)
-                lower_val = value_map[lower_dip]
-                base_value = lower_val + (dip - lower_dip) * step_size * 10
-            elif higher_dips:
-                higher_dip = min(higher_dips)
-                higher_val = value_map[higher_dip]
-                base_value = higher_val - (higher_dip - dip) * step_size * 10
+            lower_dips = [d for d in sorted_dips if d < dip]
+            
+            if higher_dips:
+                next_dip = min(higher_dips)
+                next_val = value_map[next_dip]
+                step_size = find_consistent_step(dip, next_dip, base_value, next_val) * 10
+            elif lower_dips:
+                prev_dip = max(lower_dips)
+                prev_val = value_map[prev_dip]
+                step_size = find_consistent_step(prev_dip, dip, prev_val, base_value) * 10
             else:
-                base_value = 0
+                step_size = 2.5
+            
+            decimal_step = step_size / 10
             for i in range(10):
-                val = round(base_value + i * step_size, 2)
+                val = round(base_value + i * decimal_step, 2)
                 if dip + i/10 > max_actual_dip:
                     break
                 row.append(val)
-        else:
+        elif dip in special_cases:
+            step_size = special_cases[dip]
             lower_dips = [d for d in sorted_dips if d <= dip]
             higher_dips = [d for d in sorted_dips if d > dip]
-            if dip in value_map:
-                base_value = value_map[dip]
-                if higher_dips:
-                    next_dip = min(higher_dips)
-                    next_val = value_map[next_dip]
-                    step_size = find_consistent_step(dip, next_dip, base_value, next_val) * 10
-                elif lower_dips and len(lower_dips) > 1:
-                    prev_dip = sorted_dips[sorted_dips.index(dip) - 1]
-                    prev_val = value_map[prev_dip]
-                    step_size = find_consistent_step(prev_dip, dip, prev_val, base_value) * 10
-                else:
-                    step_size = 2.5
-            else:
-                if lower_dips and higher_dips:
+            
+            # Check if there's a reference point within this DIP range (dip.0 to dip.9)
+            refs_in_range = [d for d in sorted_dips if dip < d < dip + 1]
+            
+            if refs_in_range:
+                # There's a reference point within this row
+                ref_dip = refs_in_range[0]
+                ref_val = value_map[ref_dip]
+                
+                # Split the row at the reference point
+                ref_decimal = int((ref_dip - dip) * 10)
+                
+                # Before reference point: use interpolation from lower DIP
+                if lower_dips:
                     lower_dip = max(lower_dips)
-                    higher_dip = min(higher_dips)
                     lower_val = value_map[lower_dip]
+                    step_before = find_consistent_step(lower_dip, ref_dip, lower_val, ref_val)
+                    base_before = lower_val + (dip - lower_dip) * step_before * 10
+                else:
+                    step_before = step_size
+                    base_before = ref_val - (ref_dip - dip) * step_before * 10
+                
+                # After reference point: use interpolation to next higher DIP
+                higher_dips_after_ref = [d for d in sorted_dips if d > ref_dip]
+                if higher_dips_after_ref:
+                    higher_dip = min(higher_dips_after_ref)
                     higher_val = value_map[higher_dip]
-                    step_size = find_consistent_step(lower_dip, higher_dip, lower_val, higher_val) * 10
-                    base_value = lower_val + (dip - lower_dip) * step_size
-                elif lower_dips:
-                    if len(lower_dips) >= 2:
-                        last_dip = max(lower_dips)
-                        second_last_idx = sorted_dips.index(last_dip) - 1
-                        second_last_dip = sorted_dips[second_last_idx]
-                        last_val = value_map[last_dip]
-                        second_last_val = value_map[second_last_dip]
-                        step_size = find_consistent_step(second_last_dip, last_dip, second_last_val, last_val) * 10
-                        base_value = last_val + (dip - last_dip) * step_size
+                    step_after = find_consistent_step(ref_dip, higher_dip, ref_val, higher_val)
+                else:
+                    step_after = step_before
+                
+                # Generate values
+                for i in range(10):
+                    if i < ref_decimal:
+                        val = round(base_before + i * step_before, 2)
                     else:
-                        base_value = value_map[max(lower_dips)]
-                        step_size = 2.5
+                        val = round(ref_val + (dip + i/10 - ref_dip) * step_after * 10, 2)
+                    if dip + i/10 > max_actual_dip:
+                        break
+                    row.append(val)
+            else:
+                # No reference point in this range, use standard interpolation
+                if lower_dips:
+                    lower_dip = max(lower_dips)
+                    lower_val = value_map[lower_dip]
+                    base_value = lower_val + (dip - lower_dip) * step_size * 10
                 elif higher_dips:
-                    first_dip = min(higher_dips)
-                    if len(higher_dips) >= 2:
-                        second_dip = sorted_dips[sorted_dips.index(first_dip) + 1]
-                        first_val = value_map[first_dip]
-                        second_val = value_map[second_dip]
-                        step_size = find_consistent_step(first_dip, second_dip, first_val, second_val) * 10
-                        base_value = first_val - (first_dip - dip) * step_size
-                    else:
-                        base_value = value_map[min(higher_dips)]
-                        step_size = 2.5
+                    higher_dip = min(higher_dips)
+                    higher_val = value_map[higher_dip]
+                    base_value = higher_val - (higher_dip - dip) * step_size * 10
                 else:
                     base_value = 0
+                for i in range(10):
+                    val = round(base_value + i * step_size, 2)
+                    if dip + i/10 > max_actual_dip:
+                        break
+                    row.append(val)
+        else:
+            # DIP not in special cases and not an exact reference
+            lower_dips = [d for d in sorted_dips if d <= dip]
+            higher_dips = [d for d in sorted_dips if d > dip]
+            
+            if lower_dips and higher_dips:
+                lower_dip = max(lower_dips)
+                higher_dip = min(higher_dips)
+                lower_val = value_map[lower_dip]
+                higher_val = value_map[higher_dip]
+                step_size = find_consistent_step(lower_dip, higher_dip, lower_val, higher_val) * 10
+                base_value = lower_val + (dip - lower_dip) * step_size
+            elif lower_dips:
+                if len(lower_dips) >= 2:
+                    last_dip = max(lower_dips)
+                    second_last_idx = sorted_dips.index(last_dip) - 1
+                    second_last_dip = sorted_dips[second_last_idx]
+                    last_val = value_map[last_dip]
+                    second_last_val = value_map[second_last_dip]
+                    step_size = find_consistent_step(second_last_dip, last_dip, second_last_val, last_val) * 10
+                    base_value = last_val + (dip - last_dip) * step_size
+                else:
+                    base_value = value_map[max(lower_dips)]
                     step_size = 2.5
+            elif higher_dips:
+                first_dip = min(higher_dips)
+                if len(higher_dips) >= 2:
+                    second_dip = sorted_dips[sorted_dips.index(first_dip) + 1]
+                    first_val = value_map[first_dip]
+                    second_val = value_map[second_dip]
+                    step_size = find_consistent_step(first_dip, second_dip, first_val, second_val) * 10
+                    base_value = first_val - (first_dip - dip) * step_size
+                else:
+                    base_value = value_map[min(higher_dips)]
+                    step_size = 2.5
+            else:
+                base_value = 0
+                step_size = 2.5
+            
             decimal_step = step_size / 10
             for i in range(10):
                 val = round(base_value + i * decimal_step, 2)
